@@ -1,0 +1,6 @@
+# Project: Luxury Hotel Symbolic Capital (LHSC) Analysis
+# Environment requirements for corpus processing
+
+pandas>=2.0.0
+spacy>=3.7.0
+tqdm>=4.66.0
