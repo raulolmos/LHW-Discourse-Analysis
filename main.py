@@ -1,6 +1,9 @@
 # main.py
 import pandas as pd
 import os
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from tqdm import tqdm
 from src.processor import CorpusProcessor
 
