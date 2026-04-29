@@ -1,10 +1,11 @@
-# processor.py
-import pandas as pd
+# src/processor.py
 import re
 import spacy
-from .config import BOILERPLATE_PATTERNS, ALLOWED_POS_TAGS, ENTITY_LABELS_TO_EXCLUDE
+# Standardize using the package name 'src'
+from src.config import BOILERPLATE_PATTERNS, ALLOWED_POS_TAGS, ENTITY_LABELS_TO_EXCLUDE
 
 class CorpusProcessor:
+    
     """
     Core NLP engine to transform raw web narratives into clean, 
     lemmatized tokens for Sketch Engine ingestion.
