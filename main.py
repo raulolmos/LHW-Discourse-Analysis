@@ -2,7 +2,7 @@
 import pandas as pd
 import os
 from tqdm import tqdm
-from processor import CorpusProcessor
+from src.processor import CorpusProcessor
 
 def run_pipeline():
     # File configuration
