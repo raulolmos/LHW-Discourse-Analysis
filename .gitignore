@@ -1,0 +1,13 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Data files (Never upload raw datasets if they are private or too large)
+data/processed/*
+!data/processed/.gitkeep
+processing_log.csv
+cleaning_summary_report.csv
+
+# Virtual environments
+venv/
+env/
