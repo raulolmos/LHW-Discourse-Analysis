@@ -2,7 +2,7 @@
 import pandas as pd
 import re
 import spacy
-from config import BOILERPLATE_PATTERNS, ALLOWED_POS_TAGS, ENTITY_LABELS_TO_EXCLUDE
+from .config import BOILERPLATE_PATTERNS, ALLOWED_POS_TAGS, ENTITY_LABELS_TO_EXCLUDE
 
 class CorpusProcessor:
     """
