@@ -152,45 +152,67 @@ def process_corpus_batch(texts: List[str], batch_size: int = 16) -> List[List[st
 
 def build_sketch_engine_corpus(csv_filepath: str, output_dir: str):
     """
-    Orchestrates the ingestion, application of LHSC NLP pipeline,
-    and exports purified TXT files ready for Sketch Engine indexing.
+    Orchestrates the ingestion, applies the LHSC NLP pipeline,
+    and exports purified TXT files with metadata-rich filenames 
+    optimized for Sketch Engine subcorpus creation.
     """
-    print(f"\n📊 Initializing LHSC v2.0 Sketch Engine Corpus Builder...")
+    print(f"\n📊 Initializing LHSC v2.1 Sketch Engine Corpus Builder...")
     
     try:
+        # We read the full matrix to access categorical metadata
         df = pd.read_csv(csv_filepath)
         print(f"📁 Detected {len(df)} institutional narratives.")
     except Exception as e:
         print(f"❌ Critical Error: Unable to read CSV. Details: {e}")
         return
 
-    id_col = 'hotel_id'
-    text_col = 'full_narrative'
-    
+    # Define paths
     os.makedirs(output_dir, exist_ok=True)
 
     start_time = time.time()
     print("\n⚙️ Executing Deep UI Purge and Transformer Pipeline...")
 
-    raw_texts = df[text_col].fillna("").astype(str).tolist()
-    file_names = df[id_col].fillna("unknown_hotel").astype(str).tolist()
-
+    # NLP batch processing (The 'Brain' of the process)
+    raw_texts = df['full_narrative'].fillna("").astype(str).tolist()
     processed_corpus = process_corpus_batch(raw_texts, batch_size=16)
 
+    # PHASE 4: METADATA-RICH EXPORT[cite: 1, 3, 4]
+    # Rationale: Incorporating 'ownership', 'region', and 'country' into the filename 
+    # allows Sketch Engine to automatically generate subcorpora for contrastive analysis.
     files_created = 0
-    for name, lemmas in zip(file_names, processed_corpus):
+    
+    for i, row in df.iterrows():
+        lemmas = processed_corpus[i]
+        
         if len(lemmas) > 0:
-            final_text = " ".join(lemmas)
-            safe_name = "".join(c for c in name if c.isalnum() or c in ('_', '-')).strip()
-            filepath = os.path.join(output_dir, f"{safe_name}.txt")
+            # 1. Sanitize and simplify metadata for filenames
+            # Independent -> Indep | Corporate/Chain -> Chain
+            ownership = "Indep" if "independent" in str(row['ownership_type']).lower() else "Chain"
             
+            # Region (first word only to avoid spaces: e.g., 'Western Europe' -> 'Western')
+            region = str(row['region']).split()[0].capitalize()
+            
+            # Country (Remove spaces: e.g., 'United Kingdom' -> 'Unitedkingdom')
+            country = "".join(str(row['country']).title().split())
+            
+            # ID (Unique identifier)
+            h_id = str(row['hotel_id']).upper()
+
+            # 2. Construct the "Scientific Name" of the file
+            # Format: OWNERSHIP_REGION_COUNTRY_ID.txt
+            rich_filename = f"{ownership}_{region}_{country}_{h_id}.txt"
+            
+            # 3. Save to disk
+            filepath = os.path.join(output_dir, rich_filename)
             with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(final_text)
-                files_created += 1
+                f.write(" ".join(lemmas))
+            
+            files_created += 1
 
     elapsed_time = time.time() - start_time
     print(f"\n✅ Execution completed in {elapsed_time:.2f} seconds.")
-    print(f"📄 Generated {files_created} absolutely purified TXT files at: {output_dir}")
+    print(f"📄 Generated {files_created} metadata-tagged files at: {output_dir}")
+    print("   Ready for Sketch Engine 'Expert Mode' ingestion.")
 
 if __name__ == "__main__":
     print("LHSC Processor Module loaded.")
