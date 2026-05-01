@@ -1,153 +1,86 @@
-"""
-==============================================================================
-MODULE: processor_trf.py
-PROJECT: PhD Thesis - Luxury Hospitality Speech Code (LHSC)
-VERSION: 3.0 (Substantial Purification)
-AUTHOR: [Su Nombre]
-SUPERVISOR: Director de Tesis (UCM)
+# ==============================================================================
+# PROJECT: LHSC - Luxury Hospitality Speech Code
+# PHASE: Corpus Purification & Validation (Paper 1)
+# STATUS: Production Ready / GitHub Version
+# ==============================================================================
 
-DESCRIPTION:
-Advanced NLP pipeline for LHW corpus purification. Implements Transformer-based 
-NER masking, Part-of-Speech filtering (focusing on semantic substance), 
-and deep domain-specific noise reduction.
-==============================================================================
-"""
-
-import os
-import re
-import time
-import pandas as pd
-import spacy
-import torch
-import nltk
+import os, re, time, pandas as pd, spacy, torch, nltk, shutil
 from nltk.corpus import stopwords
-from typing import List
+from collections import Counter
+from google.colab import drive, files
 
-# --- INITIALIZATION & RESOURCE CHECK ---
-# GPU acceleration is non-negotiable for Transformer models (Paper 1 quality)
+# 1. SETUP & DRIVE MOUNTING
+drive.mount('/content/drive', force_remount=True)
+nltk.download('stopwords', quiet=True)
 spacy.prefer_gpu()
-try:
-    nlp = spacy.load("en_core_web_trf")
-    print(f"🚀 EXCELLENCE: Transformer model loaded on: {torch.cuda.get_device_name(0)}")
-except Exception as e:
-    print("❌ ERROR: Failed to load en_core_web_trf. Verify installation.")
-    raise
-
-# Ensure NLTK resources are available for standard academic filtering
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords', quiet=True)
-
+nlp = spacy.load("en_core_web_trf")
 ENG_STOPWORDS = set(stopwords.words('english'))
 
-# --- DOMAIN NOISE & TECHNICAL BLACKLIST ---
-# These terms represent 'mediation noise' (UI, legal, technical artifacts) 
-# and must be excluded to reveal the 'Luxury Core' of LHW.
-DOMAIN_NOISE = {
-    # UI/UX & Web Infrastructure
-    'website', 'page', 'content', 'site', 'link', 'provider', 'click', 'browse', 
-    'browser', 'online', 'internet', 'platform', 'app', 'download', 'user', 
-    'visitor', 'navigation', 'menu', 'button', 'scroll', 'availability',
+# 2. DEFINICIÓN DEL "FILTRO DE SUSTANCIA" (ACTUALIZABLE)
+# Aquí es donde usted añade el ruido residual que detectamos en la auditoría
+ACADEMIC_BLACKLIST = {
+    # UI/UX & Web Artifacts
+    'cookie', 'cooky', 'datum', 'data', 'website', 'page', 'content', 'site', 'link', 
+    'provider', 'click', 'browse', 'browser', 'online', 'internet', 'platform', 
+    'app', 'download', 'user', 'visitor', 'navigation', 'menu', 'button', 'scroll',
     
-    # Transactional & Legal (Residue from web scraping)
-    'booking', 'reservation', 'preference', 'advertisement', 'cooky', 'cookie', 
-    'datum', 'data', 'policy', 'privacy', 'term', 'condition', 'consent', 
-    'manage', 'storage', 'duration', 'necessary', 'third', 'party', 'access',
+    # Transactional & Legal
+    'booking', 'reservation', 'preference', 'advertisement', 'policy', 'privacy', 
+    'term', 'condition', 'consent', 'manage', 'storage', 'duration', 'necessary', 
+    'third', 'party', 'access', 'availability', 'available', 'information',
     
-    # Generic hospitality terms (optional: remove if they dilute the LHSC dimensions)
-    'stay', 'book', 'room', 'rooms', 'hotel', 'hotel_id', 'available', 'include', 
-    'offer', 'offers', 'provide', 'information', 'check', 'type', 'number'
+    # Generic Hospitality (Noise for LHSC Dimensions)
+    'stay', 'book', 'room', 'rooms', 'suite', 'suites', 'hotel', 'hotel_id', 
+    'include', 'offer', 'offers', 'provide', 'check', 'type', 'number'
 }
 
-# Administrative and structural Regex patterns
-ADMIN_PATTERNS = [
-    r"(?i)general manager:?.*?\n", # Removes manager blocks
-    r"(?i)fax:?.*?(\n|$)",         # Removes fax lines
-    r"(?i)code (cin|cir|ciu).*? ", # Removes legal identifiers
-    r"https?://\S+|www\.\S+",      # Removes URLs
-    r"\S+@\S+",                    # Removes Emails
-    r"\d{4,}"                      # Removes long ID numbers/phones
-]
-
-def clean_for_substance(text: str) -> str:
-    """
-    Distills text into pure semantic substance (Nouns & Adjectives).
-    Applies NER masking and triple-layer lexical filtering.
-    """
-    if not isinstance(text, str) or len(text) < 30:
-        return ""
-
-    # Phase 1: Structural purification (Regex)
-    t = text
-    for pattern in ADMIN_PATTERNS:
-        t = re.sub(pattern, " ", t)
+def clean_for_excellence(text):
+    """Refined purification: Masks entities and extracts semantic substance."""
+    if not isinstance(text, str) or len(text) < 30: return ""
     
-    # Phase 2: NLP Deep Processing
+    # regex cleaning (Faxes, Managers, IDs, Emails, URLs)
+    t = re.sub(r"(?i)general manager:?.*?\n|fax:?.*?(\n|$)|code (cin|cir|ciu).*? |https?://\S+|www\.\S+|\S+@\S+", " ", text)
+    
     doc = nlp(t)
     clean_tokens = []
-    
     for token in doc:
-        # NER Masking: Preserves syntactic structure while neutralizing bias
-        if token.ent_type_ in ["GPE", "LOC", "ORG"]:
-            # For Sketch Engine context, we could keep tags, 
-            # but for pure substance audit, we skip.
-            continue 
-            
+        # NER Masking: Avoid geographic/brand bias but preserve syntax for future analysis
+        if token.ent_type_ in ["GPE", "LOC", "ORG"]: continue 
+        
         low_lemma = token.lemma_.lower()
         
-        # Phase 3: Triple-Layer Excellence Filter
-        # Layer 1: Standard Stopwords & Custom Blacklist
-        # Layer 2: Minimum length (avoids noise/fragments)
-        # Layer 3: POS Filtering (Only Nouns and Adjectives carry De Barnier's dimensions)
+        # QUALITY FILTER: Substance Only (Nouns & Adjectives)
         if (low_lemma not in ENG_STOPWORDS and 
-            low_lemma not in DOMAIN_NOISE and 
+            low_lemma not in ACADEMIC_BLACKLIST and 
             len(low_lemma) > 3 and 
             token.pos_ in ['NOUN', 'ADJ']):
-            
             clean_tokens.append(low_lemma)
             
     return " ".join(clean_tokens)
 
-def build_lhsc_corpus(csv_path: str, output_dir: str):
-    """
-    Builds the final corpus with rich metadata in filenames for Paper 2 comparison.
-    """
-    print(f"📄 Starting Corpus Distillation...")
+# 3. CORE EXECUTION ENGINE
+def execute_corpus_pipeline(csv_path, output_dir):
     df = pd.read_csv(csv_path)
     os.makedirs(output_dir, exist_ok=True)
+    print(f"📄 Iniciando procesamiento de {len(df)} hoteles...")
     
-    start_time = time.time()
-    count = 0
-    
+    start = time.time()
     for _, row in df.iterrows():
-        purified = clean_for_substance(str(row['full_narrative']))
-        
-        # Minimum threshold to ensure scientific validity
+        purified = clean_for_excellence(str(row['full_narrative']))
         if len(purified.split()) > 10:
-            # Metadata naming convention: Ownership_Region_Country_ID
+            # Metadata-Rich Filenames: Ownership_Region_Country_ID
             own = "Indep" if "independent" in str(row['ownership_type']).lower() else "Chain"
             reg = str(row['region']).split()[0].capitalize()
             cou = "".join(str(row['country']).title().split())
             hid = str(row['hotel_id']).upper()
             
-            filename = f"{own}_{reg}_{cou}_{hid}.txt"
-            with open(os.path.join(output_dir, filename), 'w', encoding='utf-8') as f:
+            with open(f"{output_dir}/{own}_{reg}_{cou}_{hid}.txt", 'w', encoding='utf-8') as f:
                 f.write(purified)
-            count += 1
-                
-    print(f"✅ Processed {count} hotels in {time.time() - start_time:.2f}s.")
-
-def run_substance_audit(output_dir: str, top_n: int = 100):
-    """Generates a high-purity frequency audit of the LHSC Core."""
-    from collections import Counter
-    all_words = []
-    for f in os.listdir(output_dir):
-        if f.endswith('.txt'):
-            with open(os.path.join(output_dir, f), 'r', encoding='utf-8') as file:
-                all_words.extend(file.read().split())
     
-    print(f"\n💎 THE LHSC LEXICAL CORE (TOP {top_n}):")
-    print("-" * 50)
-    for i, (word, freq) in enumerate(Counter(all_words).most_common(top_n), 1):
-        print(f"{i:3}. {word:15} ({freq:5})")
+    print(f"✅ Proceso finalizado en {time.time() - start:.2f}s")
+
+# 4. PATHS & RUN
+INPUT_CSV = '/content/drive/MyDrive/_doctorado/Fase 2 Beatriz Chaves/04_official_sites_text_corpus.csv'
+FINAL_TXT_DIR = '/content/LHSC_TXT_FILES'
+
+execute_corpus_pipeline(INPUT_CSV, FINAL_TXT_DIR)
